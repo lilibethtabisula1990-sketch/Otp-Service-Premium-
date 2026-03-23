@@ -203,6 +203,50 @@ const services = [
   }
 ];
 
+const emailServices = [
+  {
+    name: "Pinterest",
+    handler: async (email: string) => {
+      const res = await axios.post("https://www.pinterest.com/resource/UserRegisterResource/create/", 
+        `source_url=%2F&data=%7B%22options%22%3A%7B%22email%22%3A%22${encodeURIComponent(email)}%22%2C%22password%22%3A%22Password123!%22%2C%22age%22%3A%2225%22%7D%2C%22context%22%3A%7B%7D%7D`,
+        { headers: { "Content-Type": "application/x-www-form-urlencoded", "X-Requested-With": "XMLHttpRequest" }, timeout: 10000 }
+      );
+      return res.status;
+    },
+  },
+  {
+    name: "Quora",
+    handler: async (email: string) => {
+      const res = await axios.post("https://www.quora.com/api/logged_out_main/send_verification_email", 
+        `email=${encodeURIComponent(email)}&verification_type=register`,
+        { headers: { "Content-Type": "application/x-www-form-urlencoded" }, timeout: 10000 }
+      );
+      return res.status;
+    },
+  },
+  {
+    name: "Tumblr",
+    handler: async (email: string) => {
+      const res = await axios.post("https://www.tumblr.com/api/v2/user/sign_up", {
+        email: email,
+        password: "Password123!",
+        tumblelog_name: `user${Date.now()}`
+      }, { timeout: 10000 });
+      return res.status;
+    },
+  },
+  {
+    name: "Steam",
+    handler: async (email: string) => {
+      const res = await axios.post("https://store.steampowered.com/join/ajaxverifyemail", 
+        `email=${encodeURIComponent(email)}&captchagid=-1&captcha_text=&emailauth=&creation_sessionid=`,
+        { headers: { "Content-Type": "application/x-www-form-urlencoded" }, timeout: 10000 }
+      );
+      return res.status;
+    },
+  }
+];
+
 async function startServer() {
   const app = express();
   
@@ -224,6 +268,10 @@ async function startServer() {
   // Get available services
   app.get("/api/services", (req, res) => {
     res.json(services.map(s => s.name));
+  });
+
+  app.get("/api/email-services", (req, res) => {
+    res.json(emailServices.map(s => s.name));
   });
 
   // Garena Checker API
@@ -288,6 +336,26 @@ async function startServer() {
       res.json({ name: service.name, status: "SUCCESS", code: status });
     } catch (error: any) {
       console.error(`[API] Service error: ${error.message}`);
+      res.json({ status: "FAILED", error: error.message });
+    }
+  });
+
+  app.post("/api/email", async (req, res) => {
+    try {
+      const { email, serviceIndex } = req.body;
+      console.log(`[Email API] Request for ${email} using service index ${serviceIndex}`);
+      
+      const idx = parseInt(serviceIndex);
+      const service = emailServices[idx];
+      
+      if (!service) {
+        return res.status(400).json({ error: `Invalid service index: ${serviceIndex}` });
+      }
+
+      const status = await service.handler(email);
+      res.json({ name: service.name, status: "SUCCESS", code: status });
+    } catch (error: any) {
+      console.error(`[Email API] Service error: ${error.message}`);
       res.json({ status: "FAILED", error: error.message });
     }
   });
