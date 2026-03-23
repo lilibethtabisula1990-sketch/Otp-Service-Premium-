@@ -17,7 +17,24 @@ import {
   ShieldCheck,
   UserCheck,
   Lock,
-  MessageCircle
+  MessageCircle,
+  LayoutDashboard,
+  Activity,
+  History,
+  Globe,
+  Cpu,
+  ArrowUpRight,
+  Clock,
+  AlertCircle,
+  Copy,
+  ExternalLink,
+  Server,
+  Database,
+  Wifi,
+  MoreVertical,
+  Search,
+  RefreshCw,
+  Trash2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -37,7 +54,16 @@ interface ProgressData {
   total: number;
 }
 
-type View = 'bomber' | 'garena' | 'settings';
+interface HistoryEntry {
+  id: string;
+  target: string;
+  type: 'SMS' | 'GARENA';
+  status: 'COMPLETED' | 'FAILED';
+  timestamp: string;
+  details: string;
+}
+
+type View = 'dashboard' | 'bomber' | 'garena' | 'settings';
 
 export default function App() {
   const [number, setNumber] = useState('');
@@ -46,8 +72,9 @@ export default function App() {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [progress, setProgress] = useState<ProgressData | null>(null);
   const [availableServices, setAvailableServices] = useState<string[]>([]);
-  const [currentView, setCurrentView] = useState<View>('bomber');
+  const [currentView, setCurrentView] = useState<View>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const stopRef = useRef(false);
 
   // Garena State
@@ -56,8 +83,31 @@ export default function App() {
   const [isCheckingGarena, setIsCheckingGarena] = useState(false);
   const [garenaResult, setGarenaResult] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [systemLogs, setSystemLogs] = useState<{ id: string; msg: string; type: 'info' | 'warn' | 'error' }[]>([]);
 
   useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    // Add some initial system logs
+    const initialLogs = [
+      { id: '1', msg: 'System kernel initialized', type: 'info' },
+      { id: '2', msg: 'Anti-DDoS layer active', type: 'info' },
+      { id: '3', msg: 'Vite dev server connected', type: 'info' },
+    ];
+    setSystemLogs(initialLogs as any);
+  }, []);
+
+  useEffect(() => {
+    // Load history from local storage
+    const savedHistory = localStorage.getItem('omni_history');
+    if (savedHistory) {
+      setHistory(JSON.parse(savedHistory));
+    }
+
     // Simulate app initialization
     const timer = setTimeout(() => {
       setIsLoading(false);
@@ -70,6 +120,19 @@ export default function App() {
 
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem('omni_history', JSON.stringify(history));
+  }, [history]);
+
+  const addHistory = (entry: Omit<HistoryEntry, 'id' | 'timestamp'>) => {
+    const newEntry: HistoryEntry = {
+      ...entry,
+      id: Math.random().toString(36).substring(7),
+      timestamp: new Date().toLocaleString()
+    };
+    setHistory(prev => [newEntry, ...prev].slice(0, 50));
+  };
 
   const handleStart = async () => {
     if (!number || isTesting || availableServices.length === 0) return;
@@ -134,6 +197,12 @@ export default function App() {
     }
 
     setIsTesting(false);
+    addHistory({
+      target: number,
+      type: 'SMS',
+      status: successful > 0 ? 'COMPLETED' : 'FAILED',
+      details: `${successful} successful, ${failed} failed`
+    });
   };
 
   const handleStop = () => {
@@ -156,6 +225,12 @@ export default function App() {
       
       const result = await response.json();
       setGarenaResult(result);
+      addHistory({
+        target: garenaAccount,
+        type: 'GARENA',
+        status: result.status === 'SUCCESS' ? 'COMPLETED' : 'FAILED',
+        details: result.status === 'SUCCESS' ? `Nickname: ${result.data.nickname}` : result.error
+      });
     } catch (err: any) {
       setGarenaResult({ status: 'FAILED', error: err.message });
     } finally {
@@ -170,37 +245,74 @@ export default function App() {
       <AnimatePresence>
         {isLoading && (
           <motion.div 
+            key="loader"
             initial={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.5 }}
-            className="fixed inset-0 z-[100] bg-[#141414] flex flex-col items-center justify-center"
+            exit={{ opacity: 0, scale: 1.1, filter: 'blur(20px)' }}
+            transition={{ duration: 0.8, ease: "easeInOut" }}
+            className="fixed inset-0 z-[100] bg-[#0A0A0A] flex flex-col items-center justify-center overflow-hidden"
           >
+            {/* Background Grid Effect */}
+            <div className="absolute inset-0 opacity-5 pointer-events-none" 
+              style={{ backgroundImage: 'radial-gradient(#ffffff 1px, transparent 1px)', backgroundSize: '40px 40px' }} 
+            />
+            
             <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
+              initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              transition={{ duration: 0.5, delay: 0.2 }}
-              className="flex flex-col items-center"
+              transition={{ duration: 0.5 }}
+              className="relative z-10 flex flex-col items-center"
             >
-              <div className="bg-white p-4 rounded-2xl mb-6 shadow-2xl shadow-white/10">
-                <Zap className="w-12 h-12 text-[#141414]" />
+              <div className="relative mb-8">
+                <motion.div 
+                  animate={{ rotate: 360 }}
+                  transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
+                  className="absolute -inset-4 border border-white/10 rounded-full"
+                />
+                <motion.div 
+                  animate={{ rotate: -360 }}
+                  transition={{ duration: 6, repeat: Infinity, ease: "linear" }}
+                  className="absolute -inset-8 border border-white/5 rounded-full border-dashed"
+                />
+                <div className="bg-white p-6 rounded-3xl shadow-[0_0_50px_rgba(255,255,255,0.1)] relative z-10">
+                  <Zap className="w-16 h-16 text-[#0A0A0A]" />
+                </div>
               </div>
-              <h1 className="text-white text-3xl font-bold tracking-tighter mb-2">OmniToolbox</h1>
-              <div className="flex items-center gap-2 text-[#6C757D] text-sm font-medium">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Initializing secure environment...</span>
+
+              <h1 className="text-white text-4xl font-display font-bold tracking-tighter mb-4 flex items-center gap-2">
+                Omni<span className="text-white/40">Toolbox</span>
+              </h1>
+
+              <div className="flex flex-col items-center gap-4">
+                <div className="flex items-center gap-3 px-4 py-2 bg-white/5 rounded-full border border-white/10 backdrop-blur-sm">
+                  <RefreshCw className="w-4 h-4 text-blue-400 animate-spin" />
+                  <span className="text-[10px] font-mono font-bold text-white/60 uppercase tracking-widest">
+                    Establishing Secure Link...
+                  </span>
+                </div>
+                
+                {/* Simulated Terminal Output */}
+                <div className="font-mono text-[9px] text-white/20 space-y-1 text-center max-w-xs">
+                  <p className="animate-pulse">{'>'}&nbsp;INITIALIZING_CORE_MODULES...</p>
+                  <p className="opacity-40">{'>'}&nbsp;ENCRYPTING_SESSION_DATA...</p>
+                  <p className="opacity-20">{'>'}&nbsp;BYPASSING_RESTRICTIONS...</p>
+                </div>
               </div>
             </motion.div>
             
-            <div className="absolute bottom-12 left-0 right-0 flex flex-col items-center gap-2">
-              <div className="w-48 h-1 bg-white/10 rounded-full overflow-hidden">
+            <div className="absolute bottom-16 left-0 right-0 flex flex-col items-center gap-4">
+              <div className="w-64 h-1 bg-white/5 rounded-full overflow-hidden relative">
                 <motion.div 
                   initial={{ width: 0 }}
                   animate={{ width: '100%' }}
-                  transition={{ duration: 2, ease: "easeInOut" }}
-                  className="h-full bg-white"
+                  transition={{ duration: 2.5, ease: "easeInOut" }}
+                  className="h-full bg-white shadow-[0_0_15px_rgba(255,255,255,0.5)]"
                 />
               </div>
-              <p className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">v2.4.0 Stable Build</p>
+              <div className="flex items-center gap-6 opacity-20">
+                <p className="text-[9px] font-bold text-white uppercase tracking-[0.3em]">v2.4.0 STABLE</p>
+                <div className="w-1 h-1 bg-white rounded-full" />
+                <p className="text-[9px] font-bold text-white uppercase tracking-[0.3em]">ENCRYPTED</p>
+              </div>
             </div>
           </motion.div>
         )}
@@ -212,19 +324,38 @@ export default function App() {
         animate={{ width: isSidebarOpen ? 280 : 0, opacity: isSidebarOpen ? 1 : 0 }}
         className="bg-white border-r border-[#E9ECEF] flex flex-col relative z-20"
       >
-        <div className="p-6 border-b border-[#E9ECEF] flex items-center gap-3">
-          <div className="bg-[#141414] p-2 rounded-lg">
-            <Zap className="w-5 h-5 text-white" />
+        <div className="p-6 border-b border-[#E9ECEF] flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-[#141414] p-2 rounded-lg shadow-lg shadow-black/20">
+              <Zap className="w-5 h-5 text-white" />
+            </div>
+            <span className="font-display font-bold tracking-tight text-xl">OmniToolbox</span>
           </div>
-          <span className="font-bold tracking-tight text-lg">OmniToolbox</span>
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(34,197,94,0.6)]" />
         </div>
 
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
           <div className="px-3 py-2 text-[10px] font-bold text-[#ADB5BD] uppercase tracking-widest">
+            Overview
+          </div>
+          <button 
+            onClick={() => { setCurrentView('dashboard'); setIsSidebarOpen(true); }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+              currentView === 'dashboard' 
+                ? 'bg-[#141414] text-white shadow-lg shadow-[#141414]/10' 
+                : 'text-[#6C757D] hover:bg-[#F1F3F5] hover:text-[#141414]'
+            }`}
+          >
+            <LayoutDashboard className="w-5 h-5" />
+            <span className="font-medium">Dashboard</span>
+            {currentView === 'dashboard' && <ChevronRight className="w-4 h-4 ml-auto opacity-50" />}
+          </button>
+
+          <div className="px-3 py-2 mt-6 text-[10px] font-bold text-[#ADB5BD] uppercase tracking-widest">
             Main Feature
           </div>
           <button 
-            onClick={() => setCurrentView('bomber')}
+            onClick={() => { setCurrentView('bomber'); setIsSidebarOpen(true); }}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
               currentView === 'bomber' 
                 ? 'bg-[#141414] text-white shadow-lg shadow-[#141414]/10' 
@@ -237,7 +368,7 @@ export default function App() {
           </button>
 
           <button 
-            onClick={() => setCurrentView('garena')}
+            onClick={() => { setCurrentView('garena'); setIsSidebarOpen(true); }}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
               currentView === 'garena' 
                 ? 'bg-[#141414] text-white shadow-lg shadow-[#141414]/10' 
@@ -253,7 +384,7 @@ export default function App() {
             System
           </div>
           <button 
-            onClick={() => setCurrentView('settings')}
+            onClick={() => { setCurrentView('settings'); setIsSidebarOpen(true); }}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
               currentView === 'settings' 
                 ? 'bg-[#141414] text-white shadow-lg shadow-[#141414]/10' 
@@ -279,12 +410,12 @@ export default function App() {
 
         <div className="p-4 border-t border-[#E9ECEF]">
           <div className="bg-[#F8F9FA] p-4 rounded-xl flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-[#DEE2E6] flex items-center justify-center font-bold text-xs">
-              JL
+            <div className="w-8 h-8 rounded-full bg-[#141414] text-white flex items-center justify-center font-bold text-xs">
+              AD
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-bold truncate">joshleetabisula79</p>
-              <p className="text-[10px] text-[#ADB5BD] truncate">Administrator</p>
+              <p className="text-xs font-bold truncate">Administrator</p>
+              <p className="text-[10px] text-[#ADB5BD] truncate">System Access</p>
             </div>
           </div>
         </div>
@@ -293,7 +424,7 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 relative">
         {/* Top Bar */}
-        <header className="h-16 bg-white border-b border-[#E9ECEF] flex items-center justify-between px-6 shrink-0">
+        <header className="h-16 bg-white/80 backdrop-blur-md border-b border-[#E9ECEF] flex items-center justify-between px-6 shrink-0 sticky top-0 z-30">
           <div className="flex items-center gap-4">
             <button 
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -301,25 +432,200 @@ export default function App() {
             >
               {isSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
-            <h2 className="font-bold text-lg capitalize">
-              {currentView === 'bomber' ? 'SMS Bomber' : currentView === 'garena' ? 'Garena Checker' : 'Settings'}
+            <h2 className="font-display font-bold text-lg capitalize tracking-tight">
+              {currentView === 'dashboard' ? 'Overview' : currentView === 'bomber' ? 'SMS Bomber' : currentView === 'garena' ? 'Garena Checker' : 'Settings'}
             </h2>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-full text-[10px] font-bold uppercase tracking-wider">
-              <ShieldCheck className="w-3 h-3" />
-              Anti-DDoS Active
+          <div className="flex items-center gap-4">
+            <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-[#F8F9FA] border border-[#E9ECEF] rounded-lg text-[11px] font-mono font-medium text-[#6C757D]">
+              <Clock className="w-3.5 h-3.5" />
+              {currentTime.toLocaleTimeString()}
             </div>
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 text-green-600 rounded-full text-[10px] font-bold uppercase tracking-wider">
-              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-              System Online
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 text-blue-600 rounded-full text-[10px] font-bold uppercase tracking-wider border border-blue-100">
+                <ShieldCheck className="w-3 h-3" />
+                Anti-DDoS
+              </div>
+              <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 text-green-600 rounded-full text-[10px] font-bold uppercase tracking-wider border border-green-100">
+                <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                Online
+              </div>
             </div>
           </div>
         </header>
 
         <div className="flex-1 overflow-y-auto p-8">
           <AnimatePresence mode="wait">
-            {currentView === 'bomber' ? (
+            {currentView === 'dashboard' ? (
+              <motion.div 
+                key="dashboard"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="max-w-6xl mx-auto space-y-8"
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                  <div className="bg-white p-6 rounded-2xl border border-[#E9ECEF] shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="bg-blue-50 p-2 rounded-lg">
+                        <Activity className="w-5 h-5 text-blue-500" />
+                      </div>
+                      <span className="text-[10px] font-bold text-green-500 bg-green-50 px-2 py-1 rounded-full">LIVE</span>
+                    </div>
+                    <p className="text-xs font-bold text-[#ADB5BD] uppercase tracking-widest">Total Operations</p>
+                    <p className="text-3xl font-bold mt-1">{history.length}</p>
+                  </div>
+                  <div className="bg-white p-6 rounded-2xl border border-[#E9ECEF] shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="bg-purple-50 p-2 rounded-lg">
+                        <Globe className="w-5 h-5 text-purple-500" />
+                      </div>
+                      <span className="text-[10px] font-bold text-[#ADB5BD]">GLOBAL</span>
+                    </div>
+                    <p className="text-xs font-bold text-[#ADB5BD] uppercase tracking-widest">Active Services</p>
+                    <p className="text-3xl font-bold mt-1">{availableServices.length}</p>
+                  </div>
+                  <div className="bg-white p-6 rounded-2xl border border-[#E9ECEF] shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="bg-orange-50 p-2 rounded-lg">
+                        <Cpu className="w-5 h-5 text-orange-500" />
+                      </div>
+                      <span className="text-[10px] font-bold text-orange-500 bg-orange-50 px-2 py-1 rounded-full">12% LOAD</span>
+                    </div>
+                    <p className="text-xs font-bold text-[#ADB5BD] uppercase tracking-widest">System Health</p>
+                    <div className="mt-4 h-1.5 bg-[#F1F3F5] rounded-full overflow-hidden">
+                      <div className="h-full bg-orange-500 w-[12%]" />
+                    </div>
+                    <p className="text-[10px] font-bold mt-2 text-[#6C757D]">STABLE</p>
+                  </div>
+                  <div className="bg-white p-6 rounded-2xl border border-[#E9ECEF] shadow-sm">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="bg-emerald-50 p-2 rounded-lg">
+                        <Wifi className="w-5 h-5 text-emerald-500" />
+                      </div>
+                      <span className="text-[10px] font-bold text-emerald-500 bg-emerald-50 px-2 py-1 rounded-full">24ms</span>
+                    </div>
+                    <p className="text-xs font-bold text-[#ADB5BD] uppercase tracking-widest">Network Latency</p>
+                    <div className="mt-4 flex items-end gap-0.5 h-6">
+                      {[4, 7, 5, 8, 6, 9, 7].map((h, i) => (
+                        <div key={i} className="flex-1 bg-emerald-500/20 rounded-t-sm" style={{ height: `${h * 10}%` }} />
+                      ))}
+                    </div>
+                    <p className="text-[10px] font-bold mt-2 text-[#6C757D]">OPTIMIZED</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  <div className="lg:col-span-2 space-y-8">
+                    <div className="bg-white rounded-2xl border border-[#E9ECEF] shadow-sm overflow-hidden">
+                      <div className="p-6 border-b border-[#E9ECEF] flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <History className="w-5 h-5 text-[#141414]" />
+                          <h3 className="font-display font-bold">Recent Activity</h3>
+                        </div>
+                        <button 
+                          onClick={() => setHistory([])}
+                          className="text-[10px] font-bold text-red-500 hover:text-red-600 uppercase tracking-widest flex items-center gap-1"
+                        >
+                          <Trash2 className="w-3 h-3" /> Clear
+                        </button>
+                      </div>
+                      <div className="divide-y divide-[#E9ECEF]">
+                        {history.length === 0 ? (
+                          <div className="p-12 text-center">
+                            <Clock className="w-12 h-12 text-[#DEE2E6] mx-auto mb-4" />
+                            <p className="text-sm text-[#ADB5BD] font-medium">No recent activity found.</p>
+                          </div>
+                        ) : (
+                          history.map((item) => (
+                            <div key={item.id} className="p-4 flex items-center justify-between hover:bg-[#F8F9FA] transition-colors group">
+                              <div className="flex items-center gap-4">
+                                <div className={`p-2 rounded-lg transition-transform group-hover:scale-110 ${item.type === 'SMS' ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>
+                                  {item.type === 'SMS' ? <Bomb className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-bold">{item.target}</p>
+                                  <p className="text-[10px] text-[#ADB5BD] font-medium uppercase tracking-wider">{item.type} • {item.timestamp}</p>
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${item.status === 'COMPLETED' ? 'bg-green-50 text-green-500' : 'bg-red-50 text-red-500'}`}>
+                                  {item.status}
+                                </span>
+                                <p className="text-[10px] text-[#6C757D] mt-1 max-w-[150px] truncate">{item.details}</p>
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="bg-white rounded-2xl border border-[#E9ECEF] shadow-sm overflow-hidden">
+                      <div className="p-6 border-b border-[#E9ECEF] flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Terminal className="w-5 h-5 text-[#141414]" />
+                          <h3 className="font-display font-bold">System Log</h3>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                          <span className="text-[10px] font-bold text-[#ADB5BD] uppercase tracking-widest">Streaming</span>
+                        </div>
+                      </div>
+                      <div className="p-4 bg-[#141414] font-mono text-[11px] h-48 overflow-y-auto space-y-1">
+                        {systemLogs.map(log => (
+                          <div key={log.id} className="flex gap-2">
+                            <span className="text-white/30">[{new Date().toLocaleTimeString()}]</span>
+                            <span className={log.type === 'error' ? 'text-red-400' : log.type === 'warn' ? 'text-yellow-400' : 'text-blue-400'}>
+                              {log.type.toUpperCase()}
+                            </span>
+                            <span className="text-white/80">{log.msg}</span>
+                          </div>
+                        ))}
+                        <div className="flex gap-2 animate-pulse">
+                          <span className="text-white/30">[{new Date().toLocaleTimeString()}]</span>
+                          <span className="text-green-400">WAIT</span>
+                          <span className="text-white/80">Listening for incoming requests...</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div className="bg-[#141414] text-white p-6 rounded-2xl shadow-xl shadow-[#141414]/20 relative overflow-hidden">
+                      <div className="relative z-10">
+                        <h3 className="font-bold text-lg mb-2">Omni Premium</h3>
+                        <p className="text-xs text-white/60 mb-6 leading-relaxed">Get access to exclusive high-speed APIs and advanced security features.</p>
+                        <button className="w-full py-3 bg-white text-[#141414] rounded-xl font-bold text-sm flex items-center justify-center gap-2 hover:bg-white/90 transition-all">
+                          Upgrade Now <ArrowUpRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                      <Zap className="absolute -right-4 -bottom-4 w-32 h-32 text-white/5 rotate-12" />
+                    </div>
+
+                    <div className="bg-white p-6 rounded-2xl border border-[#E9ECEF] shadow-sm">
+                      <h3 className="font-bold text-sm mb-4 flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 text-orange-500" />
+                        System Status
+                      </h3>
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-[#6C757D]">API Gateway</span>
+                          <span className="text-[10px] font-bold text-green-500">OPERATIONAL</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-[#6C757D]">Database Cluster</span>
+                          <span className="text-[10px] font-bold text-green-500">OPERATIONAL</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-[#6C757D]">Rate Limiter</span>
+                          <span className="text-[10px] font-bold text-green-500">OPERATIONAL</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+            ) : currentView === 'bomber' ? (
               <motion.div 
                 key="bomber"
                 initial={{ opacity: 0, y: 10 }}
@@ -331,113 +637,147 @@ export default function App() {
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                   {/* Configuration Card */}
                   <div className="lg:col-span-5 space-y-6">
-                    <div className="bg-white rounded-2xl border border-[#E9ECEF] p-8 shadow-sm">
-                      <h3 className="text-sm font-bold uppercase tracking-widest text-[#ADB5BD] mb-6">Configuration</h3>
-                      
-                      <div className="space-y-6">
-                        <div>
-                          <label className="block text-xs font-bold mb-2 text-[#495057]">Target Phone Number</label>
-                          <div className="relative group">
-                            <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#ADB5BD] group-focus-within:text-[#141414] transition-colors" />
-                            <input 
-                              type="text" 
-                              placeholder="09123456789"
-                              value={number}
-                              onChange={(e) => setNumber(e.target.value)}
-                              disabled={isTesting}
-                              className="w-full bg-[#F8F9FA] border border-[#E9ECEF] rounded-xl py-4 pl-12 pr-4 focus:outline-none focus:border-[#141414] focus:bg-white transition-all font-mono text-lg"
-                            />
+                    <div className="bg-white rounded-2xl border border-[#E9ECEF] p-8 shadow-sm relative overflow-hidden">
+                      <div className="relative z-10">
+                        <div className="flex items-center gap-4 mb-8">
+                          <div className="bg-[#141414] p-3 rounded-xl shadow-lg shadow-black/20">
+                            <Bomb className="w-6 h-6 text-white" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-display font-bold">SMS Stress Test</h3>
+                            <p className="text-sm text-[#6C757D]">Configure and launch high-volume request sequences.</p>
                           </div>
                         </div>
 
-                        <div>
-                          <label className="block text-xs font-bold mb-2 text-[#495057]">Request Volume</label>
-                          <div className="relative group">
-                            <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#ADB5BD] group-focus-within:text-[#141414] transition-colors" />
-                            <input 
-                              type="number" 
-                              value={totalRequests}
-                              onChange={(e) => setTotalRequests(parseInt(e.target.value))}
-                              disabled={isTesting}
-                              className="w-full bg-[#F8F9FA] border border-[#E9ECEF] rounded-xl py-4 pl-12 pr-4 focus:outline-none focus:border-[#141414] focus:bg-white transition-all font-mono text-lg"
-                            />
+                        <div className="space-y-6">
+                          <div>
+                            <label className="block text-[10px] font-bold mb-2 text-[#ADB5BD] uppercase tracking-widest">Target Phone Number</label>
+                            <div className="relative group">
+                              <Smartphone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#ADB5BD] group-focus-within:text-[#141414] transition-colors" />
+                              <input 
+                                type="text" 
+                                placeholder="09123456789"
+                                value={number}
+                                onChange={(e) => setNumber(e.target.value)}
+                                disabled={isTesting}
+                                className="w-full bg-[#F8F9FA] border border-[#E9ECEF] rounded-xl py-4 pl-12 pr-4 focus:outline-none focus:border-[#141414] focus:bg-white transition-all font-mono text-lg"
+                              />
+                            </div>
                           </div>
-                        </div>
 
-                        {isTesting ? (
-                          <button 
-                            onClick={handleStop}
-                            className="w-full py-4 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold transition-all shadow-lg shadow-red-500/20 flex items-center justify-center gap-3"
-                          >
-                            <Loader2 className="w-5 h-5 animate-spin" />
-                            Stop Operation
-                          </button>
-                        ) : (
-                          <button 
-                            onClick={handleStart}
-                            disabled={!number}
-                            className="w-full py-4 bg-[#141414] hover:bg-[#2D3436] text-white rounded-xl font-bold transition-all shadow-lg shadow-[#141414]/20 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
-                          >
-                            <Play className="w-5 h-5" />
-                            Initiate Stress Test
-                          </button>
-                        )}
+                          <div>
+                            <label className="block text-[10px] font-bold mb-2 text-[#ADB5BD] uppercase tracking-widest">Request Volume</label>
+                            <div className="relative group">
+                              <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#ADB5BD] group-focus-within:text-[#141414] transition-colors" />
+                              <input 
+                                type="number" 
+                                value={totalRequests}
+                                onChange={(e) => setTotalRequests(parseInt(e.target.value))}
+                                disabled={isTesting}
+                                className="w-full bg-[#F8F9FA] border border-[#E9ECEF] rounded-xl py-4 pl-12 pr-4 focus:outline-none focus:border-[#141414] focus:bg-white transition-all font-mono text-lg"
+                              />
+                            </div>
+                          </div>
+
+                          {isTesting ? (
+                            <button 
+                              onClick={handleStop}
+                              className="w-full py-4 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold transition-all shadow-lg shadow-red-500/20 flex items-center justify-center gap-3"
+                            >
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                              Stop Operation
+                            </button>
+                          ) : (
+                            <button 
+                              onClick={handleStart}
+                              disabled={!number}
+                              className="w-full py-4 bg-[#141414] hover:bg-[#2D3436] text-white rounded-xl font-bold transition-all shadow-lg shadow-[#141414]/20 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <Play className="w-5 h-5" />
+                              Initiate Sequence
+                            </button>
+                          )}
+                        </div>
                       </div>
+                      <Zap className="absolute -right-8 -bottom-8 w-32 h-32 text-[#F8F9FA] rotate-12" />
                     </div>
 
-                    {/* Quick Stats */}
+                    {/* Performance Metrics */}
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="bg-white rounded-2xl border border-[#E9ECEF] p-6 shadow-sm">
-                        <p className="text-[10px] font-bold text-[#ADB5BD] uppercase tracking-widest mb-1">Success Rate</p>
-                        <p className="text-2xl font-bold font-mono">{successRate.toFixed(1)}%</p>
+                      <div className="bg-white rounded-2xl border border-[#E9ECEF] p-6 shadow-sm group hover:border-[#141414] transition-colors">
+                        <div className="flex items-center justify-between mb-4">
+                          <p className="text-[10px] font-bold text-[#ADB5BD] uppercase tracking-widest">Success Rate</p>
+                          <Zap className="w-4 h-4 text-yellow-500" />
+                        </div>
+                        <p className="text-3xl font-display font-bold">{successRate.toFixed(1)}%</p>
+                        <div className="mt-4 h-1 bg-[#F1F3F5] rounded-full overflow-hidden">
+                          <motion.div 
+                            className="h-full bg-green-500"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${successRate}%` }}
+                          />
+                        </div>
                       </div>
-                      <div className="bg-white rounded-2xl border border-[#E9ECEF] p-6 shadow-sm">
-                        <p className="text-[10px] font-bold text-[#ADB5BD] uppercase tracking-widest mb-1">Processed</p>
-                        <p className="text-2xl font-bold font-mono">{progress?.completed || 0}</p>
+                      <div className="bg-white rounded-2xl border border-[#E9ECEF] p-6 shadow-sm group hover:border-[#141414] transition-colors">
+                        <div className="flex items-center justify-between mb-4">
+                          <p className="text-[10px] font-bold text-[#ADB5BD] uppercase tracking-widest">Processed</p>
+                          <Activity className="w-4 h-4 text-blue-500" />
+                        </div>
+                        <p className="text-3xl font-display font-bold">{progress?.completed || 0}</p>
+                        <p className="text-[10px] text-[#ADB5BD] font-bold mt-2 uppercase tracking-widest">Of {totalRequests} Requests</p>
                       </div>
                     </div>
                   </div>
 
                   {/* Logs Card */}
                   <div className="lg:col-span-7 flex flex-col min-h-[500px]">
-                    <div className="bg-white rounded-2xl border border-[#E9ECEF] shadow-sm flex flex-col h-full overflow-hidden">
-                      <div className="p-6 border-b border-[#E9ECEF] flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Terminal className="w-4 h-4 text-[#ADB5BD]" />
-                          <h3 className="text-xs font-bold uppercase tracking-widest">Live Telemetry</h3>
+                    <div className="bg-[#141414] rounded-2xl shadow-2xl flex flex-col h-full overflow-hidden border border-white/5">
+                      <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/5 backdrop-blur-sm">
+                        <div className="flex items-center gap-3">
+                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                          <h3 className="text-[10px] font-bold uppercase tracking-widest text-white/60">Sequence Telemetry</h3>
                         </div>
-                        {isTesting && (
-                          <div className="flex items-center gap-2 text-[10px] font-bold text-[#141414]">
-                            <span className="w-1.5 h-1.5 bg-[#141414] rounded-full animate-ping" />
-                            STREAMING
-                          </div>
-                        )}
+                        <div className="flex items-center gap-4">
+                          {isTesting && (
+                            <div className="flex items-center gap-2 text-[10px] font-bold text-blue-400">
+                              <RefreshCw className="w-3 h-3 animate-spin" />
+                              LIVE
+                            </div>
+                          )}
+                          <button 
+                            onClick={() => setLogs([])}
+                            className="text-[10px] font-bold text-white/40 hover:text-white/80 transition-colors uppercase tracking-widest"
+                          >
+                            Clear
+                          </button>
+                        </div>
                       </div>
                       
-                      <div className="flex-1 overflow-y-auto font-mono text-[11px] p-2">
-                        <div className="space-y-1">
+                      <div className="flex-1 overflow-y-auto font-mono text-[11px] p-4 custom-scrollbar">
+                        <div className="space-y-1.5">
                           {logs.length === 0 && (
-                            <div className="h-full flex flex-col items-center justify-center py-20 opacity-20">
-                              <Terminal className="w-12 h-12 mb-4" />
-                              <p className="font-bold">Awaiting sequence initiation...</p>
+                            <div className="h-full flex flex-col items-center justify-center py-32 opacity-10 text-white">
+                              <Terminal className="w-16 h-16 mb-4" />
+                              <p className="font-bold tracking-widest uppercase">Awaiting Signal...</p>
                             </div>
                           )}
                           <AnimatePresence initial={false}>
                             {logs.map((log) => (
                               <motion.div 
                                 key={log.id}
-                                initial={{ opacity: 0, x: -4 }}
+                                initial={{ opacity: 0, x: -10 }}
                                 animate={{ opacity: 1, x: 0 }}
-                                className="flex items-center gap-4 px-4 py-2 hover:bg-[#F8F9FA] rounded-lg group transition-colors"
+                                className="flex items-center gap-4 px-3 py-2 hover:bg-white/5 rounded transition-colors group"
                               >
-                                <span className="text-[#ADB5BD] shrink-0">{log.timestamp}</span>
-                                <span className="font-bold w-24 truncate">{log.service}</span>
-                                <span className={`font-bold shrink-0 ${log.status === 'SUCCESS' ? 'text-green-500' : 'text-red-500'}`}>
+                                <span className="text-white/20 shrink-0">[{log.timestamp}]</span>
+                                <span className="text-white/60 font-bold w-24 truncate">{log.service}</span>
+                                <span className={`font-bold shrink-0 px-1.5 py-0.5 rounded text-[9px] ${log.status === 'SUCCESS' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
                                   {log.status === 'SUCCESS' ? 'OK' : 'ERR'}
                                 </span>
-                                <span className="text-[#6C757D] truncate">
+                                <span className="text-white/40 truncate flex-1">
                                   {log.status === 'SUCCESS' ? `HTTP ${log.code}` : log.error}
                                 </span>
+                                <ArrowUpRight className="w-3 h-3 text-white/0 group-hover:text-white/20 transition-colors" />
                               </motion.div>
                             ))}
                           </AnimatePresence>
@@ -446,9 +786,9 @@ export default function App() {
 
                       {/* Progress bar at bottom of logs */}
                       {isTesting && progress && (
-                        <div className="h-1 bg-[#F1F3F5] w-full">
+                        <div className="h-1.5 bg-white/5 w-full">
                           <motion.div 
-                            className="h-full bg-[#141414]"
+                            className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
                             initial={{ width: 0 }}
                             animate={{ width: `${(progress.completed / progress.total) * 100}%` }}
                           />
@@ -512,64 +852,87 @@ export default function App() {
 
                   {garenaResult && (
                     <motion.div 
-                      initial={{ opacity: 0, scale: 0.95 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      className={`mt-8 p-6 rounded-2xl border ${
-                        garenaResult.status === 'SUCCESS' ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className={`mt-8 p-6 rounded-2xl border-2 ${
+                        garenaResult.status === 'SUCCESS' ? 'bg-white border-green-500/20 shadow-xl shadow-green-500/5' : 'bg-white border-red-500/20 shadow-xl shadow-red-500/5'
                       }`}
                     >
                       {garenaResult.status === 'SUCCESS' ? (
-                        <div className="space-y-4">
-                          <div className="flex items-center gap-3 text-green-700">
-                            <CheckCircle2 className="w-5 h-5" />
-                            <span className="font-bold">Account Verified Successfully</span>
+                        <div className="space-y-6">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white shadow-lg">
+                                <UserCheck className="w-8 h-8" />
+                              </div>
+                              <div>
+                                <h4 className="text-2xl font-display font-bold text-[#141414]">{garenaResult.data.nickname}</h4>
+                                <p className="text-sm text-[#6C757D] font-medium">UID: {garenaResult.data.uid}</p>
+                              </div>
+                            </div>
+                            <button 
+                              onClick={() => {
+                                navigator.clipboard.writeText(`Nickname: ${garenaResult.data.nickname}\nUID: ${garenaResult.data.uid}`);
+                              }}
+                              className="p-2 hover:bg-[#F1F3F5] rounded-xl transition-colors text-[#6C757D]"
+                              title="Copy Info"
+                            >
+                              <Copy className="w-5 h-5" />
+                            </button>
                           </div>
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div className="bg-white/50 p-3 rounded-lg">
-                              <p className="text-[10px] font-bold text-[#ADB5BD] uppercase">Nickname</p>
-                              <p className="font-bold">{garenaResult.data.nickname}</p>
+
+                          <div className="grid grid-cols-2 gap-4">
+                            <div className="p-4 bg-[#F8F9FA] rounded-xl border border-[#E9ECEF]">
+                              <p className="text-[10px] font-bold text-[#ADB5BD] uppercase tracking-widest mb-1">Email Status</p>
+                              <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${garenaResult.data.email_status === 1 ? 'bg-green-500' : 'bg-orange-500'}`} />
+                                <p className="font-bold text-sm">{garenaResult.data.email_status === 1 ? 'Verified' : 'Unverified'}</p>
+                              </div>
                             </div>
-                            <div className="bg-white/50 p-3 rounded-lg">
-                              <p className="text-[10px] font-bold text-[#ADB5BD] uppercase">UID</p>
-                              <p className="font-bold">{garenaResult.data.uid}</p>
-                            </div>
-                            <div className="bg-white/50 p-3 rounded-lg">
-                              <p className="text-[10px] font-bold text-[#ADB5BD] uppercase">Email Status</p>
-                              <p className="font-bold">{garenaResult.data.email_status === 1 ? 'Verified' : 'Unverified'}</p>
-                            </div>
-                            <div className="bg-white/50 p-3 rounded-lg">
-                              <p className="text-[10px] font-bold text-[#ADB5BD] uppercase">Mobile Status</p>
-                              <p className="font-bold">{garenaResult.data.mobile_status === 1 ? 'Verified' : 'Unverified'}</p>
+                            <div className="p-4 bg-[#F8F9FA] rounded-xl border border-[#E9ECEF]">
+                              <p className="text-[10px] font-bold text-[#ADB5BD] uppercase tracking-widest mb-1">Mobile Status</p>
+                              <div className="flex items-center gap-2">
+                                <div className={`w-2 h-2 rounded-full ${garenaResult.data.mobile_status === 1 ? 'bg-green-500' : 'bg-orange-500'}`} />
+                                <p className="font-bold text-sm">{garenaResult.data.mobile_status === 1 ? 'Verified' : 'Unverified'}</p>
+                              </div>
                             </div>
                           </div>
 
                           {garenaResult.data.codm && (
-                            <div className="mt-4 p-4 bg-blue-500/5 border border-blue-500/10 rounded-xl">
-                              <div className="flex items-center gap-2 mb-3 text-blue-600">
-                                <Zap className="w-4 h-4" />
-                                <span className="text-xs font-bold uppercase tracking-wider">CODM Profile Detected</span>
+                            <div className="p-6 bg-[#141414] rounded-2xl text-white relative overflow-hidden">
+                              <div className="relative z-10">
+                                <div className="flex items-center gap-2 mb-4">
+                                  <div className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse" />
+                                  <p className="text-[10px] font-bold uppercase tracking-widest text-white/60">CODM Profile Detected</p>
+                                </div>
+                                <div className="grid grid-cols-3 gap-4">
+                                  <div>
+                                    <p className="text-[10px] font-bold text-white/40 uppercase mb-1">Nickname</p>
+                                    <p className="font-bold text-sm truncate">{garenaResult.data.codm.nickname}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] font-bold text-white/40 uppercase mb-1">Level</p>
+                                    <p className="font-bold text-sm">{garenaResult.data.codm.level}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] font-bold text-white/40 uppercase mb-1">EXP</p>
+                                    <p className="font-bold text-sm">{garenaResult.data.codm.exp}</p>
+                                  </div>
+                                </div>
                               </div>
-                              <div className="grid grid-cols-3 gap-4 text-xs">
-                                <div>
-                                  <p className="text-[10px] font-bold text-[#ADB5BD] uppercase">Nickname</p>
-                                  <p className="font-bold">{garenaResult.data.codm.nickname}</p>
-                                </div>
-                                <div>
-                                  <p className="text-[10px] font-bold text-[#ADB5BD] uppercase">Level</p>
-                                  <p className="font-bold">{garenaResult.data.codm.level}</p>
-                                </div>
-                                <div>
-                                  <p className="text-[10px] font-bold text-[#ADB5BD] uppercase">EXP</p>
-                                  <p className="font-bold">{garenaResult.data.codm.exp}</p>
-                                </div>
-                              </div>
+                              <Smartphone className="absolute -right-4 -bottom-4 w-24 h-24 text-white/5 rotate-12" />
                             </div>
                           )}
                         </div>
                       ) : (
-                        <div className="flex items-center gap-3 text-red-700">
-                          <XCircle className="w-5 h-5" />
-                          <span className="font-bold">Check Failed: {garenaResult.error}</span>
+                        <div className="flex items-center gap-4 text-red-600">
+                          <div className="bg-red-50 p-3 rounded-xl">
+                            <XCircle className="w-6 h-6" />
+                          </div>
+                          <div>
+                            <p className="font-bold">Check Failed</p>
+                            <p className="text-sm opacity-80">{garenaResult.error}</p>
+                          </div>
                         </div>
                       )}
                     </motion.div>
