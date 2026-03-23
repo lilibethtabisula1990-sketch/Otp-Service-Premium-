@@ -34,7 +34,12 @@ import {
   MoreVertical,
   Search,
   RefreshCw,
-  Trash2
+  Trash2,
+  Rocket,
+  Shield,
+  ZapOff,
+  Sparkles,
+  Mail
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -57,13 +62,38 @@ interface ProgressData {
 interface HistoryEntry {
   id: string;
   target: string;
-  type: 'SMS' | 'GARENA';
+  type: 'SMS' | 'GARENA' | 'EMAIL';
   status: 'COMPLETED' | 'FAILED';
   timestamp: string;
   details: string;
 }
 
-type View = 'dashboard' | 'bomber' | 'garena' | 'settings';
+type View = 'dashboard' | 'bomber' | 'garena' | 'settings' | 'upcoming' | 'email';
+
+// --- Components ---
+const GoogleAd = ({ slot, className = "" }: { slot: string; className?: string }) => {
+  useEffect(() => {
+    try {
+      // @ts-ignore
+      (window.adsbygoogle = window.adsbygoogle || []).push({});
+    } catch (e) {
+      console.error("AdSense error:", e);
+    }
+  }, []);
+
+  return (
+    <div className={`overflow-hidden bg-white/5 rounded-xl border border-white/5 ${className}`}>
+      <ins
+        className="adsbygoogle"
+        style={{ display: "block" }}
+        data-ad-client="ca-pub-9809664392885217"
+        data-ad-slot={slot}
+        data-ad-format="auto"
+        data-full-width-responsive="true"
+      />
+    </div>
+  );
+};
 
 export default function App() {
   const [number, setNumber] = useState('');
@@ -76,6 +106,15 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const stopRef = useRef(false);
+  const emailStopRef = useRef(false);
+
+  // Email State
+  const [email, setEmail] = useState('');
+  const [emailRequests, setEmailRequests] = useState(10);
+  const [isEmailTesting, setIsEmailTesting] = useState(false);
+  const [emailLogs, setEmailLogs] = useState<LogEntry[]>([]);
+  const [emailProgress, setEmailProgress] = useState<ProgressData | null>(null);
+  const [availableEmailServices, setAvailableEmailServices] = useState<string[]>([]);
 
   // Garena State
   const [garenaAccount, setGarenaAccount] = useState('');
@@ -117,6 +156,11 @@ export default function App() {
       .then(res => res.json())
       .then(data => setAvailableServices(data))
       .catch(err => console.error('Failed to fetch services:', err));
+
+    fetch('/api/email-services')
+      .then(res => res.json())
+      .then(data => setAvailableEmailServices(data))
+      .catch(err => console.error('Failed to fetch email services:', err));
 
     return () => clearTimeout(timer);
   }, []);
@@ -238,7 +282,84 @@ export default function App() {
     }
   };
 
+  const handleEmailStart = async () => {
+    if (!email || isEmailTesting || availableEmailServices.length === 0) return;
+    
+    setEmailLogs([]);
+    setEmailProgress({ completed: 0, successful: 0, failed: 0, total: emailRequests });
+    setIsEmailTesting(true);
+    emailStopRef.current = false;
+
+    let completed = 0;
+    let successful = 0;
+    let failed = 0;
+
+    for (let i = 0; i < emailRequests; i++) {
+      if (emailStopRef.current) break;
+
+      const serviceIndex = Math.floor(Math.random() * availableEmailServices.length);
+      
+      try {
+        const response = await fetch('/api/email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, serviceIndex }),
+        });
+        
+        const result = await response.json();
+        
+        if (result.status === 'SUCCESS') {
+          successful++;
+          setEmailLogs(prev => [{
+            id: Math.random().toString(36),
+            service: result.name,
+            status: 'SUCCESS',
+            code: result.code,
+            timestamp: new Date().toLocaleTimeString()
+          }, ...prev].slice(0, 100));
+        } else {
+          failed++;
+          setEmailLogs(prev => [{
+            id: Math.random().toString(36),
+            service: 'Email Integration',
+            status: 'FAILED',
+            error: result.error,
+            timestamp: new Date().toLocaleTimeString()
+          }, ...prev].slice(0, 100));
+        }
+      } catch (err: any) {
+        failed++;
+        setEmailLogs(prev => [{
+          id: Math.random().toString(36),
+          service: 'Network',
+          status: 'FAILED',
+          error: err.message,
+          timestamp: new Date().toLocaleTimeString()
+        }, ...prev].slice(0, 100));
+      }
+
+      completed++;
+      setEmailProgress({ completed, successful, failed, total: emailRequests });
+      
+      await new Promise(r => setTimeout(r, 1200)); // Slightly slower for email
+    }
+
+    setIsEmailTesting(false);
+    addHistory({
+      target: email,
+      type: 'EMAIL',
+      status: successful > 0 ? 'COMPLETED' : 'FAILED',
+      details: `${successful} successful, ${failed} failed`
+    });
+  };
+
+  const handleEmailStop = () => {
+    emailStopRef.current = true;
+    setIsEmailTesting(false);
+  };
+
   const successRate = progress ? (progress.successful / progress.completed || 0) * 100 : 0;
+  const emailSuccessRate = emailProgress ? (emailProgress.successful / emailProgress.completed || 0) * 100 : 0;
 
   return (
     <div className="flex h-screen bg-[#F8F9FA] text-[#2D3436] font-sans overflow-hidden">
@@ -380,6 +501,35 @@ export default function App() {
             {currentView === 'garena' && <ChevronRight className="w-4 h-4 ml-auto opacity-50" />}
           </button>
 
+          <button 
+            onClick={() => { setCurrentView('email'); setIsSidebarOpen(true); }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+              currentView === 'email' 
+                ? 'bg-[#141414] text-white shadow-lg shadow-[#141414]/10' 
+                : 'text-[#6C757D] hover:bg-[#F1F3F5] hover:text-[#141414]'
+            }`}
+          >
+            <Mail className="w-5 h-5" />
+            <span className="font-medium">Email Bomber</span>
+            {currentView === 'email' && <ChevronRight className="w-4 h-4 ml-auto opacity-50" />}
+          </button>
+
+          <button 
+            onClick={() => { setCurrentView('upcoming'); setIsSidebarOpen(true); }}
+            className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
+              currentView === 'upcoming' 
+                ? 'bg-[#141414] text-white shadow-lg shadow-[#141414]/10' 
+                : 'text-[#6C757D] hover:bg-[#F1F3F5] hover:text-[#141414]'
+            }`}
+          >
+            <Rocket className="w-5 h-5" />
+            <span className="font-medium">Upcoming</span>
+            <div className="ml-auto flex items-center gap-1">
+              <span className="text-[8px] font-bold bg-blue-500 text-white px-1.5 py-0.5 rounded-full">NEW</span>
+              {currentView === 'upcoming' && <ChevronRight className="w-4 h-4 opacity-50" />}
+            </div>
+          </button>
+
           <div className="px-3 py-2 mt-6 text-[10px] font-bold text-[#ADB5BD] uppercase tracking-widest">
             System
           </div>
@@ -408,6 +558,10 @@ export default function App() {
           </a>
         </nav>
 
+        <div className="px-4 pb-4">
+          <GoogleAd slot="1234567890" className="h-[100px]" />
+        </div>
+
         <div className="p-4 border-t border-[#E9ECEF]">
           <div className="bg-[#F8F9FA] p-4 rounded-xl flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-[#141414] text-white flex items-center justify-center font-bold text-xs">
@@ -433,7 +587,11 @@ export default function App() {
               {isSidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
             <h2 className="font-display font-bold text-lg capitalize tracking-tight">
-              {currentView === 'dashboard' ? 'Overview' : currentView === 'bomber' ? 'SMS Bomber' : currentView === 'garena' ? 'Garena Checker' : 'Settings'}
+              {currentView === 'dashboard' ? 'Overview' : 
+               currentView === 'bomber' ? 'SMS Bomber' : 
+               currentView === 'email' ? 'Email Bomber' :
+               currentView === 'garena' ? 'Garena Checker' : 
+               currentView === 'upcoming' ? 'Upcoming Features' : 'Settings'}
             </h2>
           </div>
           <div className="flex items-center gap-4">
@@ -624,6 +782,14 @@ export default function App() {
                     </div>
                   </div>
                 </div>
+
+                <div className="bg-white p-6 rounded-2xl border border-[#E9ECEF] shadow-sm">
+                  <div className="flex items-center gap-3 mb-4">
+                    <Sparkles className="w-5 h-5 text-blue-500" />
+                    <h3 className="font-display font-bold">Sponsored</h3>
+                  </div>
+                  <GoogleAd slot="0987654321" className="h-[250px]" />
+                </div>
               </motion.div>
             ) : currentView === 'bomber' ? (
               <motion.div 
@@ -798,6 +964,177 @@ export default function App() {
                   </div>
                 </div>
               </motion.div>
+            ) : currentView === 'email' ? (
+              <motion.div 
+                key="email"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="max-w-5xl mx-auto space-y-8"
+              >
+                <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                  {/* Configuration Card */}
+                  <div className="lg:col-span-5 space-y-6">
+                    <div className="bg-white rounded-2xl border border-[#E9ECEF] p-8 shadow-sm relative overflow-hidden">
+                      <div className="relative z-10">
+                        <div className="flex items-center gap-4 mb-8">
+                          <div className="bg-[#141414] p-3 rounded-xl shadow-lg shadow-black/20">
+                            <Mail className="w-6 h-6 text-white" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-display font-bold">Email Stress Test</h3>
+                            <p className="text-sm text-[#6C757D]">Simulate high-volume email registration requests.</p>
+                          </div>
+                        </div>
+
+                        <div className="space-y-6">
+                          <div>
+                            <label className="block text-[10px] font-bold mb-2 text-[#ADB5BD] uppercase tracking-widest">Target Email Address</label>
+                            <div className="relative group">
+                              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#ADB5BD] group-focus-within:text-[#141414] transition-colors" />
+                              <input 
+                                type="email" 
+                                placeholder="target@example.com"
+                                value={email}
+                                onChange={(e) => setEmail(e.target.value)}
+                                disabled={isEmailTesting}
+                                className="w-full bg-[#F8F9FA] border border-[#E9ECEF] rounded-xl py-4 pl-12 pr-4 focus:outline-none focus:border-[#141414] focus:bg-white transition-all font-mono text-lg"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-[10px] font-bold mb-2 text-[#ADB5BD] uppercase tracking-widest">Request Volume</label>
+                            <div className="relative group">
+                              <Hash className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#ADB5BD] group-focus-within:text-[#141414] transition-colors" />
+                              <input 
+                                type="number" 
+                                value={emailRequests}
+                                onChange={(e) => setEmailRequests(parseInt(e.target.value))}
+                                disabled={isEmailTesting}
+                                className="w-full bg-[#F8F9FA] border border-[#E9ECEF] rounded-xl py-4 pl-12 pr-4 focus:outline-none focus:border-[#141414] focus:bg-white transition-all font-mono text-lg"
+                              />
+                            </div>
+                          </div>
+
+                          {isEmailTesting ? (
+                            <button 
+                              onClick={handleEmailStop}
+                              className="w-full py-4 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold transition-all shadow-lg shadow-red-500/20 flex items-center justify-center gap-3"
+                            >
+                              <Loader2 className="w-5 h-5 animate-spin" />
+                              Stop Operation
+                            </button>
+                          ) : (
+                            <button 
+                              onClick={handleEmailStart}
+                              disabled={!email}
+                              className="w-full py-4 bg-[#141414] hover:bg-[#2D3436] text-white rounded-xl font-bold transition-all shadow-lg shadow-[#141414]/20 flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              <Play className="w-5 h-5" />
+                              Initiate Sequence
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      <Zap className="absolute -right-8 -bottom-8 w-32 h-32 text-[#F8F9FA] rotate-12" />
+                    </div>
+
+                    {/* Performance Metrics */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-white rounded-2xl border border-[#E9ECEF] p-6 shadow-sm group hover:border-[#141414] transition-colors">
+                        <div className="flex items-center justify-between mb-4">
+                          <p className="text-[10px] font-bold text-[#ADB5BD] uppercase tracking-widest">Success Rate</p>
+                          <Zap className="w-4 h-4 text-yellow-500" />
+                        </div>
+                        <p className="text-3xl font-display font-bold">{emailSuccessRate.toFixed(1)}%</p>
+                        <div className="mt-4 h-1 bg-[#F1F3F5] rounded-full overflow-hidden">
+                          <motion.div 
+                            className="h-full bg-green-500"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${emailSuccessRate}%` }}
+                          />
+                        </div>
+                      </div>
+                      <div className="bg-white rounded-2xl border border-[#E9ECEF] p-6 shadow-sm group hover:border-[#141414] transition-colors">
+                        <div className="flex items-center justify-between mb-4">
+                          <p className="text-[10px] font-bold text-[#ADB5BD] uppercase tracking-widest">Processed</p>
+                          <Activity className="w-4 h-4 text-blue-500" />
+                        </div>
+                        <p className="text-3xl font-display font-bold">{emailProgress?.completed || 0}</p>
+                        <p className="text-[10px] text-[#ADB5BD] font-bold mt-2 uppercase tracking-widest">Of {emailRequests} Requests</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Logs Card */}
+                  <div className="lg:col-span-7 flex flex-col min-h-[500px]">
+                    <div className="bg-[#141414] rounded-2xl shadow-2xl flex flex-col h-full overflow-hidden border border-white/5">
+                      <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/5 backdrop-blur-sm">
+                        <div className="flex items-center gap-3">
+                          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                          <h3 className="text-[10px] font-bold uppercase tracking-widest text-white/60">Email Telemetry</h3>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          {isEmailTesting && (
+                            <div className="flex items-center gap-2 text-[10px] font-bold text-blue-400">
+                              <RefreshCw className="w-3 h-3 animate-spin" />
+                              LIVE
+                            </div>
+                          )}
+                          <button 
+                            onClick={() => setEmailLogs([])}
+                            className="text-[10px] font-bold text-white/40 hover:text-white/80 transition-colors uppercase tracking-widest"
+                          >
+                            Clear
+                          </button>
+                        </div>
+                      </div>
+                      
+                      <div className="flex-1 overflow-y-auto font-mono text-[11px] p-4 custom-scrollbar">
+                        <div className="space-y-1.5">
+                          {emailLogs.length === 0 && (
+                            <div className="h-full flex flex-col items-center justify-center py-32 opacity-10 text-white">
+                              <Terminal className="w-16 h-16 mb-4" />
+                              <p className="font-bold tracking-widest uppercase">Awaiting Signal...</p>
+                            </div>
+                          )}
+                          <AnimatePresence initial={false}>
+                            {emailLogs.map((log) => (
+                              <motion.div 
+                                key={log.id}
+                                initial={{ opacity: 0, x: -10 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                className="flex items-center gap-4 px-3 py-2 hover:bg-white/5 rounded transition-colors group"
+                              >
+                                <span className="text-white/20 shrink-0">[{log.timestamp}]</span>
+                                <span className="text-white/60 font-bold w-24 truncate">{log.service}</span>
+                                <span className={`font-bold shrink-0 px-1.5 py-0.5 rounded text-[9px] ${log.status === 'SUCCESS' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                                  {log.status === 'SUCCESS' ? 'OK' : 'ERR'}
+                                </span>
+                                <span className="text-white/40 truncate flex-1">
+                                  {log.status === 'SUCCESS' ? `HTTP ${log.code}` : log.error}
+                                </span>
+                                <ArrowUpRight className="w-3 h-3 text-white/0 group-hover:text-white/20 transition-colors" />
+                              </motion.div>
+                            ))}
+                          </AnimatePresence>
+                        </div>
+                      </div>
+
+                      {isEmailTesting && emailProgress && (
+                        <div className="h-1.5 bg-white/5 w-full">
+                          <motion.div 
+                            className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 shadow-[0_0_10px_rgba(59,130,246,0.5)]"
+                            initial={{ width: 0 }}
+                            animate={{ width: `${(emailProgress.completed / emailProgress.total) * 100}%` }}
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
             ) : currentView === 'garena' ? (
               <motion.div 
                 key="garena"
@@ -937,6 +1274,133 @@ export default function App() {
                       )}
                     </motion.div>
                   )}
+                </div>
+              </motion.div>
+            ) : currentView === 'upcoming' ? (
+              <motion.div 
+                key="upcoming"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                className="max-w-5xl mx-auto space-y-8"
+              >
+                <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white p-8 rounded-3xl border border-[#E9ECEF] shadow-sm overflow-hidden relative">
+                  <div className="relative z-10">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div className="bg-blue-500/10 p-2 rounded-lg">
+                        <Sparkles className="w-5 h-5 text-blue-500" />
+                      </div>
+                      <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest">Roadmap 2026</span>
+                    </div>
+                    <h3 className="text-3xl font-display font-bold tracking-tight mb-2">Upcoming Features</h3>
+                    <p className="text-[#6C757D] max-w-lg">We're constantly working on expanding OmniToolbox. Here's a sneak peek at what's coming in the next major updates.</p>
+                  </div>
+                  <Rocket className="absolute -right-8 -bottom-8 w-48 h-48 text-[#F8F9FA] -rotate-12" />
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {[
+                    {
+                      title: "Discord Webhook Spammer",
+                      desc: "High-speed Discord webhook message automation with customizable payloads and rate-limit handling.",
+                      icon: <MessageCircle className="w-6 h-6 text-indigo-500" />,
+                      status: "In Development",
+                      progress: 65,
+                      color: "indigo"
+                    },
+                    {
+                      title: "Email Bomber v2",
+                      desc: "Advanced email stress testing with multiple SMTP provider rotation and proxy support.",
+                      icon: <Bomb className="w-6 h-6 text-red-500" />,
+                      status: "Planning",
+                      progress: 20,
+                      color: "red"
+                    },
+                    {
+                      title: "Social Media OSINT",
+                      desc: "Gather public information from various social platforms using advanced search techniques.",
+                      icon: <Search className="w-6 h-6 text-blue-500" />,
+                      status: "Queued",
+                      progress: 5,
+                      color: "blue"
+                    },
+                    {
+                      title: "Proxy Scraper & Checker",
+                      desc: "Automatically find and verify high-speed proxies for your stress testing operations.",
+                      icon: <Globe className="w-6 h-6 text-emerald-500" />,
+                      status: "In Development",
+                      progress: 45,
+                      color: "emerald"
+                    },
+                    {
+                      title: "Custom API Integration",
+                      desc: "Add your own API endpoints to the SMS Bomber engine for personalized testing.",
+                      icon: <Cpu className="w-6 h-6 text-orange-500" />,
+                      status: "In Development",
+                      progress: 80,
+                      color: "orange"
+                    },
+                    {
+                      title: "Advanced Analytics",
+                      desc: "Detailed reports and graphs of your operations with export capabilities.",
+                      icon: <Activity className="w-6 h-6 text-purple-500" />,
+                      status: "Planning",
+                      progress: 15,
+                      color: "purple"
+                    }
+                  ].map((feature, i) => (
+                    <motion.div 
+                      key={i}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.1 }}
+                      className="bg-white p-6 rounded-2xl border border-[#E9ECEF] shadow-sm hover:shadow-md transition-all group"
+                    >
+                      <div className="flex items-center justify-between mb-6">
+                        <div className={`p-3 rounded-xl bg-${feature.color}-500/10 group-hover:scale-110 transition-transform`}>
+                          {feature.icon}
+                        </div>
+                        <span className={`text-[9px] font-bold px-2 py-1 rounded-full bg-${feature.color}-50 text-${feature.color}-600 uppercase tracking-wider`}>
+                          {feature.status}
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-lg mb-2">{feature.title}</h4>
+                      <p className="text-xs text-[#6C757D] leading-relaxed mb-6">{feature.desc}</p>
+                      
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-[#ADB5BD]">
+                          <span>Development Progress</span>
+                          <span>{feature.progress}%</span>
+                        </div>
+                        <div className="h-1.5 bg-[#F1F3F5] rounded-full overflow-hidden">
+                          <motion.div 
+                            initial={{ width: 0 }}
+                            animate={{ width: `${feature.progress}%` }}
+                            transition={{ duration: 1, delay: 0.5 + i * 0.1 }}
+                            className={`h-full bg-${feature.color}-500`}
+                          />
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
+
+                <div className="bg-[#141414] rounded-3xl p-8 text-white relative overflow-hidden">
+                  <div className="relative z-10 flex flex-col md:flex-row items-center justify-between gap-8">
+                    <div className="text-center md:text-left">
+                      <h3 className="text-2xl font-display font-bold mb-2">Have a feature request?</h3>
+                      <p className="text-white/60 text-sm">We're always open to suggestions from our community.</p>
+                    </div>
+                    <a 
+                      href="https://t.me/ItsMeJeff"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-8 py-4 bg-white text-[#141414] rounded-2xl font-bold text-sm hover:bg-white/90 transition-all shadow-xl shadow-white/10 flex items-center gap-2"
+                    >
+                      Submit Suggestion <MessageCircle className="w-4 h-4" />
+                    </a>
+                  </div>
+                  <div className="absolute top-0 right-0 w-64 h-64 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl" />
                 </div>
               </motion.div>
             ) : (
