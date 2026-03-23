@@ -3,10 +3,75 @@ import { createServer as createViteServer } from "vite";
 import path from "path";
 import axios from "axios";
 import { fileURLToPath } from "url";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+import crypto from "crypto";
+import CryptoJS from "crypto-js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// --- Garena Logic ---
+const GARENA_API = "https://auth.garena.com/api/v1";
+const CODM_APP_ID = 100067;
+
+function getPassMd5(password: string): string {
+  return crypto.createHash("md5").update(password).digest("hex");
+}
+
+function hashPassword(password: string, vcode: string): string {
+  const md5Pass = getPassMd5(password);
+  return crypto.createHash("md5").update(md5Pass + vcode.toLowerCase()).digest("hex");
+}
+
+async function garenaPrelogin(account: string) {
+  const res = await axios.get(`${GARENA_API}/prelogin`, {
+    params: { account, format: "json" },
+    timeout: 10000
+  });
+  return res.data;
+}
+
+async function garenaLogin(account: string, passwordHash: string, vcode: string) {
+  const res = await axios.post(`${GARENA_API}/login`, {
+    account,
+    password: passwordHash,
+    vcode,
+    format: "json"
+  }, { timeout: 10000 });
+  return res.data;
+}
+
+async function getCodmInfo(garenaAccessToken: string) {
+  try {
+    // 1. Get CODM app login
+    const appLoginRes = await axios.get(`${GARENA_API}/login/app/${CODM_APP_ID}`, {
+      params: { access_token: garenaAccessToken, format: "json" },
+      timeout: 10000
+    });
+
+    if (!appLoginRes.data.callback) return null;
+
+    // 2. Follow callback to get CODM access token
+    const callbackRes = await axios.get(appLoginRes.data.callback, { timeout: 10000 });
+    const codmAccessToken = callbackRes.data.access_token;
+
+    if (!codmAccessToken) return null;
+
+    // 3. Get CODM user info
+    const userInfoRes = await axios.get("https://api.codm.garena.com/v1/user/info", {
+      params: { access_token: codmAccessToken },
+      timeout: 10000
+    });
+
+    return userInfoRes.data;
+  } catch (error) {
+    console.error("[CODM] Error:", error);
+    return null;
+  }
+}
+
+// --- Services ---
 const services = [
   {
     name: "S5.com",
@@ -140,11 +205,69 @@ const services = [
 
 async function startServer() {
   const app = express();
+  
+  // Anti-DDoS and Security Protection
+  app.use(helmet()); // Sets various HTTP headers for security
+  
+  const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per windowMs
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many requests, please try again later." }
+  });
+  
+  app.use("/api/", limiter); // Apply rate limiting to all API routes
+  
   app.use(express.json());
 
   // Get available services
   app.get("/api/services", (req, res) => {
     res.json(services.map(s => s.name));
+  });
+
+  // Garena Checker API
+  app.post("/api/garena/check", async (req, res) => {
+    try {
+      const { account, password } = req.body;
+      if (!account || !password) {
+        return res.status(400).json({ error: "Account and password are required" });
+      }
+
+      const prelogin = await garenaPrelogin(account);
+      if (prelogin.error) {
+        return res.json({ status: "FAILED", error: prelogin.error });
+      }
+
+      const passwordHash = hashPassword(password, prelogin.vcode);
+      const login = await garenaLogin(account, passwordHash, prelogin.vcode);
+
+      if (login.error) {
+        return res.json({ status: "FAILED", error: login.error });
+      }
+
+      // Check CODM Info
+      const codmInfo = await getCodmInfo(login.access_token);
+
+      res.json({ 
+        status: "SUCCESS", 
+        data: {
+          uid: login.uid,
+          nickname: login.nickname,
+          account: login.account,
+          email_status: login.email_status,
+          mobile_status: login.mobile_status,
+          codm: codmInfo ? {
+            nickname: codmInfo.nickname,
+            level: codmInfo.level,
+            exp: codmInfo.exp
+          } : null
+        }
+      });
+    } catch (error: any) {
+      console.error(`[Garena] Error: ${error.message}`);
+      res.json({ status: "FAILED", error: error.message });
+    }
   });
 
   // Local API handler (matches Netlify Function logic)

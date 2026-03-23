@@ -1,5 +1,5 @@
 {
-  "name": "SMS Service Stress Tester",
-  "description": "A professional utility for testing SMS OTP service integrations and API resilience with real-time analytics.",
+  "name": "OmniToolbox",
+  "description": "A versatile suite of professional utilities including SMS OTP service testing and API resilience analytics.",
   "requestFramePermissions": []
 }
