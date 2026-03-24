@@ -12,7 +12,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // --- Garena Logic ---
-const GARENA_API = "https://auth.garena.com/api/v1";
+const GARENA_API = "https://sso.garena.com/api/v1";
 const CODM_APP_ID = 100067;
 
 function getPassMd5(password: string): string {
@@ -313,8 +313,9 @@ async function startServer() {
         }
       });
     } catch (error: any) {
-      console.error(`[Garena] Error: ${error.message}`);
-      res.json({ status: "FAILED", error: error.message });
+      const errorMsg = error.response?.data?.error || error.message;
+      console.error(`[Garena] Error: ${errorMsg}`);
+      res.json({ status: "FAILED", error: errorMsg });
     }
   });
 
