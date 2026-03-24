@@ -71,27 +71,69 @@ interface HistoryEntry {
 type View = 'dashboard' | 'bomber' | 'garena' | 'settings' | 'upcoming' | 'email';
 
 // --- Components ---
-const GoogleAd = ({ slot, className = "" }: { slot: string; className?: string }) => {
-  useEffect(() => {
-    try {
-      // @ts-ignore
-      (window.adsbygoogle = window.adsbygoogle || []).push({});
-    } catch (e) {
-      console.error("AdSense error:", e);
-    }
-  }, []);
-
+const StartIoAd = ({ type = "banner", className = "", label = "Sponsored" }: { type?: "banner" | "mrec" | "interstitial"; className?: string; label?: string }) => {
   return (
-    <div className={`overflow-hidden bg-white/5 rounded-xl border border-white/5 ${className}`}>
-      <ins
-        className="adsbygoogle"
-        style={{ display: "block" }}
-        data-ad-client="ca-pub-9809664392885217"
-        data-ad-slot={slot}
-        data-ad-format="auto"
-        data-full-width-responsive="true"
-      />
+    <div className={`relative overflow-hidden bg-white/5 rounded-xl border border-white/5 ${className}`}>
+      <div className="absolute top-0 right-0 px-1.5 py-0.5 bg-black/40 backdrop-blur-sm text-[8px] font-bold text-white/40 uppercase tracking-widest rounded-bl-lg z-10">
+        {label}
+      </div>
+      <div 
+        className="startapp-ad" 
+        data-ad-type={type} 
+        data-publisher-id="202207019"
+        style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyCenter: 'center' }}
+      ></div>
     </div>
+  );
+};
+
+const InterstitialAd = ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) => {
+  useEffect(() => {
+    if (isOpen) {
+      // Try to show Start.io interstitial if SDK is loaded
+      // @ts-ignore
+      if (window.startApp && typeof window.startApp.showInterstitial === 'function') {
+        // @ts-ignore
+        window.startApp.showInterstitial();
+      }
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+  return (
+    <motion.div 
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="fixed inset-0 z-[200] bg-black/90 backdrop-blur-xl flex items-center justify-center p-6"
+    >
+      <div className="max-w-md w-full bg-white rounded-3xl overflow-hidden shadow-2xl relative">
+        <button 
+          onClick={onClose}
+          className="absolute top-4 right-4 p-2 bg-black/5 hover:bg-black/10 rounded-full transition-colors z-20"
+        >
+          <X className="w-5 h-5" />
+        </button>
+        <div className="p-8 flex flex-col items-center text-center">
+          <div className="w-16 h-16 bg-blue-500 rounded-2xl flex items-center justify-center mb-6 shadow-lg shadow-blue-500/20">
+            <Sparkles className="w-8 h-8 text-white" />
+          </div>
+          <h3 className="text-2xl font-display font-bold mb-2">Special Offer</h3>
+          <p className="text-[#6C757D] mb-8">Upgrade to OmniToolbox Pro for unlimited requests and zero ads.</p>
+          
+          <div className="w-full aspect-video bg-[#F8F9FA] rounded-2xl mb-8 flex items-center justify-center border border-[#E9ECEF] relative overflow-hidden">
+            <StartIoAd type="mrec" className="w-full h-full" label="Ad" />
+          </div>
+
+          <button 
+            onClick={onClose}
+            className="w-full py-4 bg-[#141414] text-white rounded-2xl font-bold hover:bg-[#2D3436] transition-all"
+          >
+            Continue to App
+          </button>
+        </div>
+      </div>
+    </motion.div>
   );
 };
 
@@ -115,6 +157,7 @@ export default function App() {
   const [emailLogs, setEmailLogs] = useState<LogEntry[]>([]);
   const [emailProgress, setEmailProgress] = useState<ProgressData | null>(null);
   const [availableEmailServices, setAvailableEmailServices] = useState<string[]>([]);
+  const [showInterstitial, setShowInterstitial] = useState(false);
 
   // Garena State
   const [garenaAccount, setGarenaAccount] = useState('');
@@ -361,8 +404,22 @@ export default function App() {
   const successRate = progress ? (progress.successful / progress.completed || 0) * 100 : 0;
   const emailSuccessRate = emailProgress ? (emailProgress.successful / emailProgress.completed || 0) * 100 : 0;
 
+  const changeView = (view: View) => {
+    // Show interstitial occasionally when changing views
+    if (Math.random() > 0.7) {
+      setShowInterstitial(true);
+    }
+    setCurrentView(view);
+    setIsSidebarOpen(true);
+  };
+
   return (
     <div className="flex h-screen bg-[#F8F9FA] text-[#2D3436] font-sans overflow-hidden">
+      <AnimatePresence>
+        {showInterstitial && (
+          <InterstitialAd isOpen={showInterstitial} onClose={() => setShowInterstitial(false)} />
+        )}
+      </AnimatePresence>
       <AnimatePresence>
         {isLoading && (
           <motion.div 
@@ -460,7 +517,7 @@ export default function App() {
             Overview
           </div>
           <button 
-            onClick={() => { setCurrentView('dashboard'); setIsSidebarOpen(true); }}
+            onClick={() => changeView('dashboard')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
               currentView === 'dashboard' 
                 ? 'bg-[#141414] text-white shadow-lg shadow-[#141414]/10' 
@@ -476,7 +533,7 @@ export default function App() {
             Main Feature
           </div>
           <button 
-            onClick={() => { setCurrentView('bomber'); setIsSidebarOpen(true); }}
+            onClick={() => changeView('bomber')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
               currentView === 'bomber' 
                 ? 'bg-[#141414] text-white shadow-lg shadow-[#141414]/10' 
@@ -489,7 +546,7 @@ export default function App() {
           </button>
 
           <button 
-            onClick={() => { setCurrentView('garena'); setIsSidebarOpen(true); }}
+            onClick={() => changeView('garena')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
               currentView === 'garena' 
                 ? 'bg-[#141414] text-white shadow-lg shadow-[#141414]/10' 
@@ -502,7 +559,7 @@ export default function App() {
           </button>
 
           <button 
-            onClick={() => { setCurrentView('email'); setIsSidebarOpen(true); }}
+            onClick={() => changeView('email')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
               currentView === 'email' 
                 ? 'bg-[#141414] text-white shadow-lg shadow-[#141414]/10' 
@@ -515,7 +572,7 @@ export default function App() {
           </button>
 
           <button 
-            onClick={() => { setCurrentView('upcoming'); setIsSidebarOpen(true); }}
+            onClick={() => changeView('upcoming')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
               currentView === 'upcoming' 
                 ? 'bg-[#141414] text-white shadow-lg shadow-[#141414]/10' 
@@ -534,7 +591,7 @@ export default function App() {
             System
           </div>
           <button 
-            onClick={() => { setCurrentView('settings'); setIsSidebarOpen(true); }}
+            onClick={() => changeView('settings')}
             className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
               currentView === 'settings' 
                 ? 'bg-[#141414] text-white shadow-lg shadow-[#141414]/10' 
@@ -559,7 +616,7 @@ export default function App() {
         </nav>
 
         <div className="px-4 pb-4">
-          <GoogleAd slot="1234567890" className="h-[100px]" />
+          <StartIoAd type="banner" className="h-[100px]" />
         </div>
 
         <div className="p-4 border-t border-[#E9ECEF]">
@@ -577,6 +634,23 @@ export default function App() {
 
       {/* Main Content */}
       <main className="flex-1 flex flex-col min-w-0 relative">
+        {/* AdMob Style Bottom Banner */}
+        <div className="fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-[#E9ECEF] h-14 flex items-center justify-center shadow-[0_-4px_10px_rgba(0,0,0,0.05)]">
+          <div className="max-w-7xl w-full px-4 flex items-center justify-between">
+            <div className="hidden sm:flex items-center gap-2">
+              <div className="bg-blue-500 p-1 rounded text-white">
+                <ShieldCheck className="w-3 h-3" />
+              </div>
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#ADB5BD]">Secure Session</span>
+            </div>
+            <div className="flex-1 flex justify-center">
+              <StartIoAd type="banner" className="h-10 w-full max-w-[320px]" label="Banner" />
+            </div>
+            <div className="hidden sm:flex items-center gap-2 text-right">
+              <span className="text-[10px] font-bold uppercase tracking-widest text-[#ADB5BD]">v2.4.0</span>
+            </div>
+          </div>
+        </div>
         {/* Top Bar */}
         <header className="h-16 bg-white/80 backdrop-blur-md border-b border-[#E9ECEF] flex items-center justify-between px-6 shrink-0 sticky top-0 z-30">
           <div className="flex items-center gap-4">
@@ -788,7 +862,7 @@ export default function App() {
                     <Sparkles className="w-5 h-5 text-blue-500" />
                     <h3 className="font-display font-bold">Sponsored</h3>
                   </div>
-                  <GoogleAd slot="0987654321" className="h-[250px]" />
+                  <StartIoAd type="mrec" className="h-[250px]" />
                 </div>
               </motion.div>
             ) : currentView === 'bomber' ? (
